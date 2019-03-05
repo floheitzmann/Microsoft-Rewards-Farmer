@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration packages="de.scarpex.mrf" level="INFO">
+    <Properties>
+        <property name="fileDate">${date:dd-MM-yyyy}</property>
+    </Properties>
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="[%d{HH:mm:ss}] [%-5level] %c{36} > %msg%n"/>
+        </Console>
+        <File name="LatestLog">
+            <FileName>logs/latest.log</FileName>
+            <PatternLayout pattern="[%d{HH:mm:ss}] [%-5level] [%t#%tid] %c{36} > %msg%n"/>
+        </File>
+    </Appenders>
+    <Loggers>
+        <Logger name="de.scarpex.mrf" level="INFO" additivity="false">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="LatestLog"/>
+        </Logger>
+        <Root level="error">
+            <AppenderRef ref="Console"/>
+            <AppenderRef ref="LatestLog"/>
+        </Root>
+    </Loggers>
+</Configuration>
