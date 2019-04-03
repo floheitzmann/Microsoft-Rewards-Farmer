@@ -1,0 +1,16 @@
+{
+  "accounts": [
+    {
+      "login": "your first account",
+      "password": "your super safe password"
+    },
+    {
+      "login": "your second account",
+      "password": "your super safe password"
+    },
+    {
+      "login": "your third account",
+      "password": "your super safe password"
+    }
+  ]
+}

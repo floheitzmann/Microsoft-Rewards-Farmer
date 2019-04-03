@@ -13,6 +13,7 @@ was written in Python.
 
 ## Features
 * Collect points via the Bing search engine
+* Multiple account support
 * Randomized search speeds
 
 ## Requirements
@@ -23,7 +24,6 @@ was written in Python.
 coming soon ...
 
 ## Todo
-* add auto downloading the chromedriver
 * add microsoft edge support
-* add multiple account support
+* test mobile rewards earning
 * add proxy support

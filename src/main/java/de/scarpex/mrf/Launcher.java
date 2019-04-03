@@ -1,7 +1,11 @@
 package de.scarpex.mrf;
 
+import de.scarpex.mrf.account.MSAccountManager;
 import de.scarpex.mrf.chromedriver.ChromeDriverUtils;
 import de.scarpex.mrf.chromedriver.OSType;
+import de.scarpex.mrf.command.CommandManager;
+import de.scarpex.mrf.command.bing.SearchCommand;
+import de.scarpex.mrf.command.general.ClearCommand;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
@@ -11,7 +15,11 @@ import org.openqa.selenium.io.Zip;
 import java.io.*;
 import java.net.URL;
 import java.util.Properties;
+import java.util.Scanner;
 
+/**
+ * The main class of the project.
+ */
 public class Launcher {
     private static final Logger log = LogManager.getLogger(Launcher.class);
 
@@ -25,10 +33,14 @@ public class Launcher {
     private static final String CONFIG = "config.properties";
 
     private Properties properties;
+    private MSAccountManager accountManager;
 
     public Launcher() {
         long epoch = System.currentTimeMillis();
         String dir = System.getProperty("user.dir");
+
+        System.setProperty("webdriver.chrome.logfile", new File("logs\\chromedriver.log").getAbsolutePath());
+        System.setProperty("webdriver.chrome.driver", String.format("%s/chromedriver/chromedriver.exe", dir));
 
         loadPropertiesFile(new File(dir));
 
@@ -55,9 +67,19 @@ public class Launcher {
             }
         }
 
+        this.accountManager = new MSAccountManager(new File(dir));
+
+        CommandManager manager = new CommandManager();
+        manager.registerCommand(new ClearCommand());
+        manager.registerCommand(new SearchCommand(this.accountManager, new File(dir)));
+
         log.info(String.format("The application is now ready to use. (took %sms)",
                 (System.currentTimeMillis() - epoch)));
 
+        Scanner scanner = new Scanner(System.in);
+        while (true) {
+            if (scanner.hasNext()) manager.readCommandLine(scanner.nextLine());
+        }
     }
 
     public static void main(String[] args) {
@@ -113,8 +135,6 @@ public class Launcher {
      * @param update Will the version be updated?
      */
     private void download(String url, File path, boolean update) {
-        // TODO: check for internet connection
-
         try {
             log.info(String.format("Start download for %s driver...", System.getProperty("os.name")));
             FileUtils.copyURLToFile(new URL(url), new File(path, "chromedriver.zip"));
@@ -142,6 +162,13 @@ public class Launcher {
                 e.printStackTrace();
             } finally {
                 log.info("Unzip complete.");
+            }
+
+            try {
+                this.properties.setProperty("chromedriver.version", ChromeDriverUtils.getLatestVersion());
+                this.properties.store(new FileOutputStream(CONFIG), null);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
