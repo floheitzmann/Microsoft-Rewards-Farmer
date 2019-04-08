@@ -14,8 +14,12 @@ import org.openqa.selenium.io.Zip;
 
 import java.io.*;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.HashSet;
 import java.util.Properties;
 import java.util.Scanner;
+import java.util.Set;
 
 /**
  * The main class of the project.
@@ -40,7 +44,7 @@ public class Launcher {
         String dir = System.getProperty("user.dir");
 
         System.setProperty("webdriver.chrome.logfile", new File("logs\\chromedriver.log").getAbsolutePath());
-        System.setProperty("webdriver.chrome.driver", String.format("%s/chromedriver/chromedriver.exe", dir));
+        System.setProperty("webdriver.chrome.driver", String.format(ChromeDriverUtils.getOS() == OSType.WINDOWS ? "%s/chromedriver/chromedriver.exe" : "%s/chromedriver/chromedriver", dir));
 
         loadPropertiesFile(new File(dir));
 
@@ -158,6 +162,14 @@ public class Launcher {
                 Zip.unzip(new FileInputStream(new File(path, "chromedriver.zip")),
                         new File("chromedriver"));
                 FileUtils.forceDelete(new File(path, "chromedriver.zip"));
+
+                if(ChromeDriverUtils.getOS() != OSType.WINDOWS){
+                    Set<PosixFilePermission> perms = new HashSet<>();
+                    perms.add(PosixFilePermission.OWNER_READ);
+                    perms.add(PosixFilePermission.OWNER_WRITE);
+                    perms.add(PosixFilePermission.OWNER_EXECUTE);
+                    Files.setPosixFilePermissions(new File(path, "chromedriver").toPath(), perms);
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             } finally {
