@@ -4,6 +4,7 @@ import de.scarpex.mrf.Launcher;
 import de.scarpex.mrf.account.MSAccount;
 import de.scarpex.mrf.account.MSAccountManager;
 import de.scarpex.mrf.command.Command;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -15,11 +16,12 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.io.*;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.stream.Stream;
 
 /**
@@ -35,41 +37,57 @@ public class SearchCommand extends Command {
     private final Random random;
     private final List<String> words;
     private final MSAccountManager accountManager;
+    private final ClassLoader loader = Thread.currentThread().getContextClassLoader();
+
+    private int highestBreak, lowestBreak;
 
     private ChromeDriver driver;
 
-    public SearchCommand(MSAccountManager accountManager, File folder) {
+    public SearchCommand(MSAccountManager accountManager, File folder, Properties properties) {
         super("search", "Automatic farming of reward points via the Bing search.");
 
         this.random = new Random();
         this.words = new ArrayList<>();
         this.accountManager = accountManager;
 
-        loadWordList(folder);
+        this.highestBreak = Integer.valueOf(properties.getProperty("highest-break-time")) * 1000;
+        this.lowestBreak = Integer.valueOf(properties.getProperty("lowest-break-time")) * 1000;
     }
 
     @Override
     public void execute(String[] args) {
-        this.driver = new ChromeDriver();
         long epoch = System.currentTimeMillis();
+        List<String> array = Arrays.asList(args);
+
+        ChromeOptions options = new ChromeOptions();
+        if (array.contains("--pc")) options.addArguments(String.format("user-agent=%s", Launcher.PC_AGENT));
+        if (array.contains("--mobile")) options.addArguments(String.format("user-agent=%s", Launcher.MOBILE_AGENT));
+        if (array.contains("--headless")) options.addArguments("--headless");
+        this.driver = new ChromeDriver(options);
 
         this.accountManager.getAccounts().forEach(account -> {
-            ChromeOptions options = new ChromeOptions();
-            options.addArguments(String.format("user-agent=%s", Launcher.PC_AGENT));
-            this.driver.getCapabilities().merge(options);
-
             login(account);
+            loadWordList();
 
-            // TODO: dont know, does it works? Test the desktop and mobile support later...
-            for (int i = 0; i < DEFAULT_DESKTOP_REQUEST_VALUE; i++) {
-                search();
+            if (array.contains("--pc")) {
+                int random = this.random.nextInt(DEFAULT_DESKTOP_REQUEST_VALUE);
+                for (int i = 0; i < DEFAULT_DESKTOP_REQUEST_VALUE; i++) {
+                    if (random == i) {
+                        loadWordList();
+                    }
+                    search();
+                }
             }
 
-            options = new ChromeOptions();
-            options.addArguments(String.format("user-agent=%s", Launcher.MOBILE_AGENT));
-            this.driver.getCapabilities().merge(options);
-            for (int i = 0; i < DEFAULT_MOBILE_REQUEST_VALUE; i++) {
-                search();
+            // TODO: fix the mobile problem
+            if (array.contains("--mobile")) {
+                int random = this.random.nextInt(DEFAULT_MOBILE_REQUEST_VALUE);
+                for (int i = 0; i < DEFAULT_MOBILE_REQUEST_VALUE; i++) {
+                    if (random == i) {
+                        loadWordList();
+                    }
+                    search();
+                }
             }
 
             logout();
@@ -125,7 +143,9 @@ public class SearchCommand extends Command {
     private void search() {
         WebElement search = this.driver.findElement(By.id("sb_form_q"));
         search.clear();
-        search.sendKeys(this.words.get(this.random.nextInt(this.words.size())));
+        String word = this.words.get(this.random.nextInt(this.words.size()));
+        search.sendKeys(word);
+        log.info("Search request: " + word);
 
         this.driver.findElement(By.id("sb_form_go")).click();
 
@@ -133,33 +153,52 @@ public class SearchCommand extends Command {
     }
 
     /**
-     * Loads a file containing 370,099 words.
+     * Loads a random file with categorized words.
      */
-    private void loadWordList(File folder) {
-        File file = new File(folder, "words.txt");
-        if (!file.exists()) {
-            try (InputStream input = getClass().getResourceAsStream("/" + "words.txt")) {
-                try (OutputStream output = new FileOutputStream(file)) {
-                    IOUtils.copy(input, output);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+    private void loadWordList() {
+        if (!this.words.isEmpty()) {
+            this.words.clear();
         }
 
-        try (Stream<String> stream = Files.lines(Paths.get("words.txt"))) {
+        try (Stream<String> stream = Files.lines(getRandomWordFile().toPath())) {
             stream.forEach(this.words::add);
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Can not read the file!", e);
         }
     }
 
     /**
-     * Wait a moment between one and two seconds.
+     * Returns a random word file.
+     *
+     * @return a file.
+     */
+    private File getRandomWordFile() {
+        File file = null;
+
+        try (Stream<Path> paths = Files.walk(Paths.get(System.getProperty("user.dir") + "/words"))) {
+            List<Object> list = Arrays.asList(paths.filter(Files::isRegularFile).toArray());
+            int random = this.random.nextInt(list.size()) + 1;
+            file = ((Path) list.get(random)).toFile();
+
+            while (!file.getName().endsWith(".txt")) {
+                random = this.random.nextInt(list.size()) + 1;
+                file = ((Path) list.get(random)).toFile();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return file;
+    }
+
+    /**
+     * Wait a moment to simulate a humanity.
      */
     private void sleep() {
         try {
-            Thread.sleep(this.random.nextInt(3000 - 1000) + 1000);
+            int random = this.random.nextInt(this.highestBreak - this.lowestBreak) + 1000;
+            log.info("Break time: " + random);
+            Thread.sleep(random);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }

@@ -41,12 +41,13 @@ public class Launcher {
 
     public Launcher() {
         long epoch = System.currentTimeMillis();
-        String dir = System.getProperty("user.dir");
+        File dir = new File(System.getProperty("user.dir"));
 
         System.setProperty("webdriver.chrome.logfile", new File("logs\\chromedriver.log").getAbsolutePath());
         System.setProperty("webdriver.chrome.driver", String.format(ChromeDriverUtils.getOS() == OSType.WINDOWS ? "%s/chromedriver/chromedriver.exe" : "%s/chromedriver/chromedriver", dir));
 
-        loadPropertiesFile(new File(dir));
+        loadPropertiesFile(dir);
+        loadWordLists(dir);
 
         log.info("Checking for new version of Chromedriver...");
         File path = new File("chromedriver");
@@ -63,7 +64,7 @@ public class Launcher {
 
             download(ChromeDriverUtils.getDownloadLink(), path, false);
         } else {
-            String version = this.properties.getProperty("chromedriver.version");
+            String version = this.properties.getProperty("chromedriver-version");
 
             if (version == null || !ChromeDriverUtils.getLatestVersion().equals(version)) {
                 log.info("New version found! Start downloading...");
@@ -71,11 +72,11 @@ public class Launcher {
             }
         }
 
-        this.accountManager = new MSAccountManager(new File(dir));
+        this.accountManager = new MSAccountManager(dir);
 
         CommandManager manager = new CommandManager();
         manager.registerCommand(new ClearCommand());
-        manager.registerCommand(new SearchCommand(this.accountManager, new File(dir)));
+        manager.registerCommand(new SearchCommand(this.accountManager, dir, this.properties));
 
         log.info(String.format("The application is now ready to use. (took %sms)",
                 (System.currentTimeMillis() - epoch)));
@@ -87,9 +88,14 @@ public class Launcher {
     }
 
     public static void main(String[] args) {
-
-        // TODO: ascii text art maybe?
-
+        System.out.println("___  ___ _____  ______                           _  ______                             \n" +
+                "|  \\/  |/  ___| | ___ \\                         | | |  ___|                            \n" +
+                "| .  . |\\ `--.  | |_/ /_____      ____ _ _ __ __| | | |_ __ _ _ __ _ __ ___   ___ _ __ \n" +
+                "| |\\/| | `--. \\ |    // _ \\ \\ /\\ / / _` | '__/ _` | |  _/ _` | '__| '_ ` _ \\ / _ \\ '__|\n" +
+                "| |  | |/\\__/ / | |\\ \\  __/\\ V  V / (_| | | | (_| | | || (_| | |  | | | | | |  __/ |   \n" +
+                "\\_|  |_/\\____/  \\_| \\_\\___| \\_/\\_/ \\__,_|_|  \\__,_| \\_| \\__,_|_|  |_| |_| |_|\\___|_|   \n" +
+                "                                                                                       \n" +
+                "made by scarpex                                                                                       ");
         new Launcher();
     }
 
@@ -131,6 +137,36 @@ public class Launcher {
     }
 
     /**
+     * If the application is started for the first time or no folder is
+     * created, then a collection full of categorized words will be downloaded.
+     *
+     * @param path The path where all files are.
+     */
+    private void loadWordLists(File path) {
+        if (!new File(path  + "/words").exists()) {
+            try {
+                log.info("No word lists found. Downloading word lists... ");
+                FileUtils.copyURLToFile(new URL("https://github.com/scarpex/wordlists/archive/master.zip"),
+                        new File(path, "wordlists.zip"));
+                log.info("Download complete.");
+            } catch (IOException e) {
+                log.error("Error by downloading the word lists.", e);
+            } finally {
+                try {
+                    log.info("Unzip...");
+                    Zip.unzip(new FileInputStream(new File(path, "wordlists.zip")), path);
+                    FileUtils.forceDelete(new File(path, "wordlists.zip"));
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    log.info("Unzip complete.");
+                    new File("wordlists-master").renameTo(new File("words"));
+                }
+            }
+        }
+    }
+
+    /**
      * Download the latest version of the Chromedriver and replace it with the
      * old version.
      *
@@ -142,16 +178,13 @@ public class Launcher {
         try {
             log.info(String.format("Start download for %s driver...", System.getProperty("os.name")));
             FileUtils.copyURLToFile(new URL(url), new File(path, "chromedriver.zip"));
-        } catch (IOException e) {
-            log.error("It seems something went wrong.", e);
-        } finally {
-            log.info("Download complete!");
+            log.info("Download complete.");
 
             if (update) {
                 try {
                     FileUtils.deleteDirectory(path);
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    log.error("Failed to delete the directory.", e);
                 } finally {
                     path.mkdirs();
                 }
@@ -177,11 +210,13 @@ public class Launcher {
             }
 
             try {
-                this.properties.setProperty("chromedriver.version", ChromeDriverUtils.getLatestVersion());
+                this.properties.setProperty("chromedriver-version", ChromeDriverUtils.getLatestVersion());
                 this.properties.store(new FileOutputStream(CONFIG), null);
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        } catch (IOException e) {
+            log.error("It seems something went wrong while downloading the chromedriver.", e);
         }
     }
 }
